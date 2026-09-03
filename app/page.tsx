@@ -137,7 +137,7 @@ function FormatMark({ format }: { format: string }) {
   const normalized = format.toLowerCase();
   if (normalized === "video" || normalized === "text") {
     return (
-      <span className="format-mark">
+      <span className={`format-mark format-mark-${normalized}`}>
         <img src={`/icons/${normalized}.svg`} alt={`${format} ad`} />
       </span>
     );

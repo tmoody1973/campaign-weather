@@ -226,6 +226,10 @@
   filter: invert(31%) sepia(48%) saturate(802%) hue-rotate(140deg)
     brightness(86%) contrast(92%);
 }
+.format-mark-video img {
+  width: 42px;
+  height: 42px;
+}
 .format-mark.format-word {
   font:
     10px ui-monospace,
