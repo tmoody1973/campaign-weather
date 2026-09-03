@@ -27,8 +27,8 @@ const layers: { key: Layer; label: string; description: string }[] = [
   },
   {
     key: "search",
-    label: "Search attention",
-    description: "Google Trends readings",
+    label: "Search context",
+    description: "What people are looking up locally",
   },
 ];
 
@@ -537,6 +537,105 @@ function EvidenceDrawer({
         Open original public source ↗
       </a>
     </aside>
+  );
+}
+
+function SearchContext({
+  trends,
+  scope,
+  geo,
+  onOpenNews,
+}: {
+  trends: AnyRecord[];
+  scope: string;
+  geo?: string;
+  onOpenNews: () => void;
+}) {
+  const readings = trends
+    .filter((item) => typeof item.latestValue === "number")
+    .sort((left, right) => right.latestValue - left.latestValue);
+  const highest = readings[0];
+  const lowest = readings.at(-1);
+  const gap =
+    highest && lowest && readings.length > 1
+      ? highest.latestValue - lowest.latestValue
+      : 0;
+  // A single low or close reading is not a voter-facing conclusion. This is a
+  // product threshold for when we describe a comparison, not a popularity or
+  // support threshold.
+  const hasClearComparison =
+    Boolean(highest && lowest) && highest.latestValue >= 10 && gap >= 10;
+  const trendsUrl = `https://trends.google.com/trends/explore?geo=${encodeURIComponent(geo ?? "US")}`;
+
+  return (
+    <section className="explorer search-context">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">LOCAL SEARCH CONTEXT</span>
+          <h2>What people are looking up locally</h2>
+          <p>
+            {scope}. Google Trends is a relative index within this comparison,
+            not a poll, audience size, or sign of support.
+          </p>
+        </div>
+      </div>
+      {readings.length ? (
+        <>
+          <section
+            className={`search-read ${hasClearComparison ? "signal" : "quiet"}`}
+            aria-label="Search context summary"
+          >
+            <div>
+              <span>HOW TO READ THIS</span>
+              <h3>
+                {hasClearComparison
+                  ? `${highest.term} has the higher latest local search reading.`
+                  : "No clear search difference to read into yet."}
+              </h3>
+              <p>
+                {hasClearComparison
+                  ? `The latest comparison is ${highest.latestValue} for ${highest.term} and ${lowest?.latestValue} for ${lowest?.term}. Treat that as a cue to check reporting and public ads—not evidence of support, persuasion, or likely results.`
+                  : `The latest readings are ${readings.map((item) => `${item.term}: ${item.latestValue}`).join(" · ")}. Campaign Weather does not turn a small or close gap into a story about voters.`}
+              </p>
+            </div>
+            <div className="search-actions">
+              <button onClick={onOpenNews}>Read local reporting →</button>
+              <a href={trendsUrl} target="_blank" rel="noreferrer">
+                Open Google Trends ↗
+              </a>
+            </div>
+          </section>
+          <section
+            className="trend-compare"
+            aria-label="Latest relative search readings"
+          >
+            {readings.map((item) => (
+              <article key={item._id}>
+                <div>
+                  <b>{item.term}</b>
+                  <strong>{item.latestValue}</strong>
+                </div>
+                <div
+                  className="trend-bar"
+                  role="img"
+                  aria-label={`${item.term}: ${item.latestValue} out of 100 relative search interest`}
+                >
+                  <i style={{ width: `${Math.max(item.latestValue, 3)}%` }} />
+                </div>
+                <p>Latest reading in this state-and-time-window comparison.</p>
+              </article>
+            ))}
+          </section>
+          <p className="search-limit">
+            Useful for: noticing a possible moment to investigate. Not useful
+            for: deciding who is ahead, what voters think, or which issue they
+            care about most.
+          </p>
+        </>
+      ) : (
+        <EmptyState text="No local Google Trends comparison has been stored yet." />
+      )}
+    </section>
   );
 }
 
@@ -1085,31 +1184,15 @@ function VoterRadar() {
               )}
             </section>
           ) : (
-            <section className="explorer">
-              <div className="section-heading">
-                <div>
-                  <h2>What is relative search attention?</h2>
-                  <p>
-                    {trendScope}. Google Trends indexes relative interest from
-                    0–100. It is not a poll, audience size, or sign of support.
-                  </p>
-                </div>
-              </div>
-              {trends.length ? (
-                <div className="trend-grid">
-                  {trends.map((item: AnyRecord) => (
-                    <button onClick={() => setDrawer(item)} key={item._id}>
-                      <span>{item.term}</span>
-                      <b>{item.latestValue ?? "—"}</b>
-                      <p>{trendScope} relative search-interest index</p>
-                      <em>Open explanation →</em>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState text="No Trends comparison has been stored yet." />
-              )}
-            </section>
+            <SearchContext
+              trends={trends}
+              scope={trendScope}
+              geo={activeDemo?.trendGeo}
+              onOpenNews={() => {
+                setLayer("news");
+                setDrawer(undefined);
+              }}
+            />
           )}
           <section className="field-note">
             <div>
