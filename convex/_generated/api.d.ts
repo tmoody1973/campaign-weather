@@ -9,6 +9,7 @@
  */
 
 import type * as campaignWeather from "../campaignWeather.js";
+import type * as ingestion from "../ingestion.js";
 
 import type {
   ApiFromModules,
@@ -18,6 +19,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   campaignWeather: typeof campaignWeather;
+  ingestion: typeof ingestion;
 }>;
 
 /**
