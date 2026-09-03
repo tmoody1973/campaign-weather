@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { v } from "convex/values";
@@ -70,12 +70,16 @@ export const refreshLivingBrief = action({
   args: { raceKey: v.string() },
   returns: v.any(),
   handler: async (ctx, args): Promise<any> => {
-    if (!process.env.OPENAI_API_KEY)
+    // Accept the original project variable during the hackathon; OpenAI's
+    // canonical name remains OPENAI_API_KEY for production deployments.
+    const apiKey = process.env.OPENAI_API_KEY ?? process.env.OPENAPI_API_KEY;
+    if (!apiKey)
       return {
         status: "blocked",
         reason:
-          "OPENAI_API_KEY is not configured in this standalone Convex deployment.",
+          "An OpenAI API key is not configured in this standalone Convex deployment.",
       };
+    const model = createOpenAI({ apiKey });
     const evidence: any = await ctx.runQuery(
       internal.campaignWeather.getBriefEvidence,
       { key: args.raceKey },
@@ -103,7 +107,7 @@ export const refreshLivingBrief = action({
         evidenceUrls: change.evidenceUrls,
       }));
     const result = await generateText({
-      model: openai(modelId),
+      model: model(modelId),
       output: Output.object({ schema: briefSchema }),
       prompt: `You are Campaign Weather's neutral civic evidence editor. Write a living brief for voters about ${evidence.race.name}. Use only the supplied stored evidence. Never recommend a candidate, predict results, imply voter opinion, infer persuasion, add facts, or attribute a claim to a source that does not support it. Ads are public provider records; amount spent and times shown are ranges, not exact totals or unique people. Google Trends measures relative search interest, not support. News is public context, not a fact check.\n\nA change is reportable only if it is in REPORTABLE CHANGES. If the list is empty, say the current capture is a baseline or no reportable change has met a threshold.\n\nREPORTABLE CHANGES:\n${JSON.stringify(reportableChanges)}\n\nSTORED EVIDENCE (cite only IDs from here):\n${sourceContext}`,
     });

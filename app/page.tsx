@@ -32,6 +32,39 @@ const layers: { key: Layer; label: string; description: string }[] = [
   },
 ];
 
+const issueDefinitions = [
+  {
+    key: "data-centers",
+    label: "Data centers",
+    terms: ["data center", "data-center"],
+  },
+  {
+    key: "taxes",
+    label: "Taxes & costs",
+    terms: [" tax", "taxes", "affordab", "cost of living", "energy cost"],
+  },
+  {
+    key: "health",
+    label: "Health care",
+    terms: ["health care", "healthcare", "hospital", "medicaid"],
+  },
+  {
+    key: "education",
+    label: "Education",
+    terms: ["school", "education", "student", "teacher"],
+  },
+  {
+    key: "housing",
+    label: "Housing",
+    terms: ["housing", "rent", "home prices", "homeownership"],
+  },
+  {
+    key: "public-safety",
+    label: "Public safety",
+    terms: ["crime", "public safety", "law enforcement"],
+  },
+] as const;
+
 function StationMark() {
   return (
     <svg className="station-mark" viewBox="0 0 48 48" aria-hidden="true">
@@ -77,6 +110,27 @@ function interleaveByCandidate(records: AnyRecord[]) {
     }
   }
   return result;
+}
+
+function publicText(record: AnyRecord) {
+  return [
+    record.creativeTitle,
+    record.creativeHeadline,
+    record.creativeLongHeadline,
+    record.creativeSnippet,
+    record.title,
+    record.snippet,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function matchesIssue(record: AnyRecord, issueKey: string) {
+  const issue = issueDefinitions.find((item) => item.key === issueKey);
+  if (!issue) return true;
+  const text = publicText(record);
+  return issue.terms.some((term) => text.includes(term));
 }
 
 function FormatMark({ format }: { format: string }) {
@@ -531,6 +585,7 @@ function VoterRadar() {
   );
   const [layer, setLayer] = useState<Layer>("ads");
   const [candidate, setCandidate] = useState<string | "all">("all");
+  const [issue, setIssue] = useState<string | "all">("all");
   const [drawer, setDrawer] = useState<AnyRecord>();
   const [showCapture, setShowCapture] = useState(false);
   const [pressDesk, setPressDesk] = useState(false);
@@ -551,12 +606,32 @@ function VoterRadar() {
   const ads = radar?.creatives ?? [];
   const news = radar?.newsItems ?? [];
   const trends = radar?.trendItems ?? [];
+  const availableIssues = issueDefinitions
+    .map((definition) => ({
+      ...definition,
+      adCount: ads.filter((record: AnyRecord) =>
+        matchesIssue(record, definition.key),
+      ).length,
+      newsCount: news.filter((record: AnyRecord) =>
+        matchesIssue(record, definition.key),
+      ).length,
+    }))
+    .filter((definition) => definition.adCount + definition.newsCount > 0);
   const visibleAds =
     candidate === "all"
       ? interleaveByCandidate(ads)
       : ads.filter(
           (creative: AnyRecord) => creative.candidateName === candidate,
         );
+  const issueFilteredAds =
+    issue === "all"
+      ? visibleAds
+      : visibleAds.filter((record: AnyRecord) => matchesIssue(record, issue));
+  const issueFilteredNews =
+    issue === "all"
+      ? news
+      : news.filter((record: AnyRecord) => matchesIssue(record, issue));
+  const selectedIssue = availableIssues.find((item) => item.key === issue);
   const activeDrawer = drawer
     ? (ads.find((creative: AnyRecord) => creative._id === drawer._id) ?? drawer)
     : undefined;
@@ -685,13 +760,18 @@ function VoterRadar() {
               ))}
           </select>
         </label>
-        <button
-          className="fetch-trigger"
-          onClick={() => setShowCapture((value) => !value)}
-        >
-          <span className="fetch-dot" />
-          Fetch race
-        </button>
+        <div className="topbar-actions">
+          <a className="about-link" href="/about">
+            What is this?
+          </a>
+          <button
+            className="fetch-trigger"
+            onClick={() => setShowCapture((value) => !value)}
+          >
+            <span className="fetch-dot" />
+            Fetch race
+          </button>
+        </div>
       </header>
       {showCapture && (
         <CapturePanel
@@ -771,6 +851,45 @@ function VoterRadar() {
             updating={briefUpdating}
             message={briefMessage}
           />
+          <section className="issue-lens" aria-label="Issues in public view">
+            <div>
+              <h2>Issues in public view</h2>
+              <p>
+                These labels group exact words found in stored public ads or
+                reporting. They do not describe a full platform or tell you what
+                matters most to voters.
+              </p>
+            </div>
+            <div className="issue-controls">
+              <button
+                className={issue === "all" ? "selected" : ""}
+                onClick={() => setIssue("all")}
+              >
+                All public records
+              </button>
+              {availableIssues.map((item) => (
+                <button
+                  key={item.key}
+                  className={issue === item.key ? "selected" : ""}
+                  onClick={() => {
+                    setIssue(item.key);
+                    setLayer(item.newsCount > 0 ? "news" : "ads");
+                  }}
+                >
+                  {item.label} <span>{item.adCount + item.newsCount}</span>
+                </button>
+              ))}
+            </div>
+            {selectedIssue && (
+              <p className="issue-result">
+                Showing <b>{selectedIssue.label}</b> in stored public text:{" "}
+                {selectedIssue.adCount} ad record
+                {selectedIssue.adCount === 1 ? "" : "s"} and{" "}
+                {selectedIssue.newsCount} news record
+                {selectedIssue.newsCount === 1 ? "" : "s"}.
+              </p>
+            )}
+          </section>
           <nav className="layer-tabs" aria-label="Choose evidence type">
             {layers.map((item) => (
               <button
@@ -823,9 +942,9 @@ function VoterRadar() {
                   </button>
                 ))}
               </div>
-              {visibleAds.length ? (
+              {issueFilteredAds.length ? (
                 <div className="creative-grid">
-                  {visibleAds.map((creative: AnyRecord) => (
+                  {issueFilteredAds.map((creative: AnyRecord) => (
                     <AdRow
                       key={creative._id}
                       creative={creative}
@@ -834,7 +953,13 @@ function VoterRadar() {
                   ))}
                 </div>
               ) : (
-                <EmptyState text="No ad records have been stored for this choice yet. Use Fetch race to request the verified advertiser records." />
+                <EmptyState
+                  text={
+                    selectedIssue
+                      ? `No stored public ad text matches “${selectedIssue.label}” yet. Try News context or open another public creative record.`
+                      : "No ad records have been stored for this choice yet. Use Fetch race to request the verified advertiser records."
+                  }
+                />
               )}
             </section>
           ) : layer === "news" ? (
@@ -848,9 +973,9 @@ function VoterRadar() {
                   </p>
                 </div>
               </div>
-              {news.length ? (
+              {issueFilteredNews.length ? (
                 <div className="news-list">
-                  {news.slice(0, 8).map((item: AnyRecord) => (
+                  {issueFilteredNews.slice(0, 8).map((item: AnyRecord) => (
                     <button onClick={() => setDrawer(item)} key={item._id}>
                       <span>
                         {item.outlet} · {item.dateLabel ?? "date not displayed"}
@@ -862,7 +987,13 @@ function VoterRadar() {
                   ))}
                 </div>
               ) : (
-                <EmptyState text="No news context has been stored yet." />
+                <EmptyState
+                  text={
+                    selectedIssue
+                      ? `No stored news context matches “${selectedIssue.label}” yet.`
+                      : "No news context has been stored yet."
+                  }
+                />
               )}
             </section>
           ) : (
