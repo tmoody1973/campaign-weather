@@ -1,16 +1,37 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 
-const WISCONSIN = { key: "wi-governor-2026", name: "Wisconsin Governor 2026", office: "Governor", state: "Wisconsin", electionDate: "2026-11-03", candidates: [{ name: "Tom Tiffany", campaignDomain: "tomtiffany.com", advertiserId: "AR15612586122486480897" }, { name: "David Crowley", campaignDomain: "crowleyforwi.com", advertiserId: "AR00233328882948767745" }] };
+const DEMO_RACES = {
+  "wi-governor-2026": { key: "wi-governor-2026", name: "Wisconsin Governor 2026", office: "Governor", state: "Wisconsin", trendGeo: "US-WI", electionDate: "2026-11-03", candidates: [{ name: "Tom Tiffany", campaignDomain: "tomtiffany.com", advertiserId: "AR15612586122486480897" }, { name: "David Crowley", campaignDomain: "crowleyforwi.com", advertiserId: "AR00233328882948767745" }] },
+  "oh-governor-2026": { key: "oh-governor-2026", name: "Ohio Governor 2026", office: "Governor", state: "Ohio", trendGeo: "US-OH", electionDate: "2026-11-03", candidates: [{ name: "Amy Acton", campaignDomain: "actonforgovernor.com", advertiserId: "AR06880288689067393025" }, { name: "Vivek Ramaswamy", campaignDomain: "vivekforohio.com", advertiserId: "AR02147995891569524737" }] },
+  "mi-governor-2026": { key: "mi-governor-2026", name: "Michigan Governor 2026", office: "Governor", state: "Michigan", trendGeo: "US-MI", electionDate: "2026-11-03", candidates: [{ name: "Jocelyn Benson", campaignDomain: "jocelynbenson.com", advertiserId: "AR12611418866174656513" }, { name: "John James", campaignDomain: "johnjamesmi.com", advertiserId: "AR03968079542714630145" }] },
+  "tx-governor-2026": { key: "tx-governor-2026", name: "Texas Governor 2026", office: "Governor", state: "Texas", trendGeo: "US-TX", electionDate: "2026-11-03", candidates: [{ name: "Gina Hinojosa", campaignDomain: "ginafortexas.com", advertiserId: "AR13885413334192226305" }, { name: "Greg Abbott", campaignDomain: "gregabbott.com", advertiserId: "AR16001764877387431937" }] },
+} as const;
+
+const WISCONSIN = DEMO_RACES["wi-governor-2026"];
 
 export const seedWisconsin = internalMutation({ args: {}, returns: v.id("races"), handler: async (ctx) => {
   const current = await ctx.db.query("races").withIndex("by_key", q => q.eq("key", WISCONSIN.key)).unique();
   if (current) return current._id;
-  return await ctx.db.insert("races", { ...WISCONSIN, updatedAt: Date.now() });
+  return await ctx.db.insert("races", { key: WISCONSIN.key, name: WISCONSIN.name, office: WISCONSIN.office, state: WISCONSIN.state, electionDate: WISCONSIN.electionDate, candidates: WISCONSIN.candidates.map(candidate => ({ ...candidate })), updatedAt: Date.now() });
 } });
+
+export const seedDemoRace = internalMutation({ args: { key: v.string() }, returns: v.id("races"), handler: async (ctx, args) => {
+  const race = DEMO_RACES[args.key as keyof typeof DEMO_RACES];
+  if (!race) throw new Error("This race is not enabled for the live demo.");
+  const current = await ctx.db.query("races").withIndex("by_key", q => q.eq("key", race.key)).unique();
+  if (current) return current._id;
+  return await ctx.db.insert("races", { key: race.key, name: race.name, office: race.office, state: race.state, electionDate: race.electionDate, candidates: race.candidates.map(candidate => ({ ...candidate })), updatedAt: Date.now() });
+} });
+
+export const listDemoRaces = query({ args: {}, returns: v.any(), handler: async () => Object.values(DEMO_RACES).map(race => ({ key: race.key, name: race.name, state: race.state, electionDate: race.electionDate, candidates: race.candidates.map(candidate => candidate.name), estimatedSearches: 4 })) });
 
 export const getWisconsinRace = internalQuery({ args: {}, returns: v.any(), handler: async (ctx) => {
   return await ctx.db.query("races").withIndex("by_key", q => q.eq("key", WISCONSIN.key)).unique();
+} });
+
+export const getDemoRace = internalQuery({ args: { key: v.string() }, returns: v.any(), handler: async (ctx, args) => {
+  return await ctx.db.query("races").withIndex("by_key", q => q.eq("key", args.key)).unique();
 } });
 
 const captureSource = v.union(v.literal("ads"), v.literal("news"), v.literal("trends"));
@@ -34,6 +55,7 @@ export const failCapture = internalMutation({ args: { captureId: v.id("captureRu
 
 const adRecord = v.object({
   candidateName: v.optional(v.string()), advertiser: v.string(), advertiserId: v.string(), creativeId: v.string(), format: v.string(), detailsLink: v.string(),
+  previewImage: v.optional(v.string()), targetDomain: v.optional(v.string()),
   firstShown: v.optional(v.number()), lastShown: v.optional(v.number()), minimumViews: v.optional(v.number()), maximumViews: v.optional(v.number()), minimumSpend: v.optional(v.string()), maximumSpend: v.optional(v.string()),
 });
 
@@ -159,6 +181,23 @@ export const seedCrowleyGoogleProfileSnapshot = internalMutation({ args: {}, ret
 
 export const getWisconsinRadar = query({ args: {}, returns: v.any(), handler: async (ctx) => {
   const race = await ctx.db.query("races").withIndex("by_key", q => q.eq("key", WISCONSIN.key)).unique();
+  if (!race) return null;
+  const captures = await ctx.db.query("captureRuns").withIndex("by_race_source_captured", q => q.eq("raceId", race._id)).collect();
+  const latest = (source: "ads" | "news" | "trends") => captures.filter(c => c.source === source && c.status === "succeeded").sort((a,b) => b.capturedAt - a.capturedAt)[0];
+  const ads = latest("ads"), news = latest("news"), trends = latest("trends");
+  const [creatives, advertiserProfiles, newsItems, trendItems, changes, budget] = await Promise.all([
+    ads ? ctx.db.query("adCreatives").withIndex("by_capture", q => q.eq("captureId", ads._id)).collect() : [],
+    ctx.db.query("advertiserProfiles").withIndex("by_race_captured", q => q.eq("raceId", race._id)).order("desc").take(24),
+    news ? ctx.db.query("newsItems").withIndex("by_capture", q => q.eq("captureId", news._id)).collect() : [],
+    trends ? ctx.db.query("trendObservations").withIndex("by_capture", q => q.eq("captureId", trends._id)).collect() : [],
+    ctx.db.query("evidenceChanges").withIndex("by_race_created", q => q.eq("raceId", race._id)).order("desc").take(24),
+    ctx.db.query("searchBudgets").withIndex("by_checked").order("desc").first(),
+  ]);
+  return { race, captures: { ads: ads ?? null, news: news ?? null, trends: trends ?? null }, creatives, advertiserProfiles, newsItems, trendItems, changes, budget };
+} });
+
+export const getRaceRadar = query({ args: { key: v.string() }, returns: v.any(), handler: async (ctx, args) => {
+  const race = await ctx.db.query("races").withIndex("by_key", q => q.eq("key", args.key)).unique();
   if (!race) return null;
   const captures = await ctx.db.query("captureRuns").withIndex("by_race_source_captured", q => q.eq("raceId", race._id)).collect();
   const latest = (source: "ads" | "news" | "trends") => captures.filter(c => c.source === source && c.status === "succeeded").sort((a,b) => b.capturedAt - a.capturedAt)[0];

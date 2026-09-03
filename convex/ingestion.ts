@@ -3,8 +3,6 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 const MINIMUM_SEARCH_RESERVE = 40;
-const WISCONSIN_NEWS_QUERY = "Wisconsin governor 2026 Tom Tiffany David Crowley";
-const WISCONSIN_TRENDS_QUERY = "Tom Tiffany,David Crowley";
 
 type SerpApiRecord = Record<string, unknown>;
 
@@ -57,6 +55,7 @@ function normalizeAds(payload: SerpApiRecord, candidateByAdvertiserId: Map<strin
     return [{
       candidateName: candidateByAdvertiserId.get(advertiserId), advertiser: text(item.advertiser) ?? "Advertiser not displayed",
       advertiserId, creativeId, format: text(item.format) ?? "Format not displayed", detailsLink,
+      previewImage: text(item.image), targetDomain: text(item.target_domain),
       firstShown: timestamp(item.first_shown), lastShown: timestamp(item.last_shown),
       minimumViews: integer(item.minimum_views_count), maximumViews: integer(item.maximum_views_count),
       minimumSpend: text(item.minimum_budget_spent), maximumSpend: text(item.maximum_budget_spent),
@@ -83,7 +82,7 @@ function normalizeTrends(payload: SerpApiRecord) {
   });
 }
 
-export const refreshWisconsin = action({ args: {}, returns: v.any(), handler: async (ctx) => {
+export const refreshRace = action({ args: { raceKey: v.string() }, returns: v.any(), handler: async (ctx, args) => {
   const apiKey = process.env.SERPAPI_API_KEY;
   if (!apiKey) return { status: "blocked", reason: "SERPAPI_API_KEY is not configured in this standalone Convex deployment." };
 
@@ -98,9 +97,9 @@ export const refreshWisconsin = action({ args: {}, returns: v.any(), handler: as
     status: "blocked", reason: `Refresh would preserve the ${MINIMUM_SEARCH_RESERVE}-search reserve; ${totalSearchesLeft} searches remain.`, totalSearchesLeft,
   };
 
-  const raceId = await ctx.runMutation(internal.campaignWeather.seedWisconsin, {});
-  const race = await ctx.runQuery(internal.campaignWeather.getWisconsinRace, {});
-  if (!race) return { status: "failed", reason: "Wisconsin race configuration was not found." };
+  const raceId = await ctx.runMutation(internal.campaignWeather.seedDemoRace, { key: args.raceKey });
+  const race = await ctx.runQuery(internal.campaignWeather.getDemoRace, { key: args.raceKey });
+  if (!race) return { status: "failed", reason: "Race configuration was not found." };
   const candidateByAdvertiserId = new Map<string, string>(race.candidates.map((candidate: { advertiserId: string; name: string }) => [candidate.advertiserId, candidate.name]));
   const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", "");
@@ -109,12 +108,14 @@ export const refreshWisconsin = action({ args: {}, returns: v.any(), handler: as
     candidate,
     parameters: { ...adsBaseParameters, advertiser_id: candidate.advertiserId },
   }));
-  const newsParameters = { engine: "google", tbm: "nws", q: WISCONSIN_NEWS_QUERY, gl: "us", hl: "en" };
-  const trendsParameters = { engine: "google_trends", q: WISCONSIN_TRENDS_QUERY, geo: "US-WI", date: "today 3-m", data_type: "TIMESERIES", hl: "en" };
+  const candidateNames = race.candidates.map((candidate: { name: string }) => candidate.name);
+  const raceTerms = `${race.state} ${race.office} 2026 ${candidateNames.join(" ")}`;
+  const newsParameters = { engine: "google", tbm: "nws", q: raceTerms, gl: "us", hl: "en" };
+  const trendsParameters = { engine: "google_trends", q: candidateNames.join(","), geo: `US-${race.state === "Wisconsin" ? "WI" : race.state === "Ohio" ? "OH" : race.state === "Michigan" ? "MI" : "TX"}`, date: "today 3-m", data_type: "TIMESERIES", hl: "en" };
   const [adsCaptureId, newsCaptureId, trendsCaptureId] = await Promise.all([
-    ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "ads", query: "Verified Google political advertisers: Tiffany + Crowley", parameters: { ...adsBaseParameters, advertiser_ids: adsSearches.map(item => item.candidate.advertiserId).join(",") } }),
-    ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "news", query: WISCONSIN_NEWS_QUERY, parameters: newsParameters }),
-    ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "trends", query: WISCONSIN_TRENDS_QUERY, parameters: trendsParameters }),
+    ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "ads", query: `Verified Google political advertisers: ${candidateNames.join(" + ")}`, parameters: { ...adsBaseParameters, advertiser_ids: adsSearches.map(item => item.candidate.advertiserId).join(",") } }),
+    ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "news", query: raceTerms, parameters: newsParameters }),
+    ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "trends", query: candidateNames.join(","), parameters: trendsParameters }),
   ]);
 
   const [adsResults, newsResult, trendsResult] = await Promise.all([
