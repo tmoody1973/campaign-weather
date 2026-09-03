@@ -38,7 +38,7 @@ const adRecord = v.object({
 });
 
 export const completeAdsCapture = internalMutation({ args: {
-  captureId: v.id("captureRuns"), rawStorageId: v.id("_storage"), records: v.array(adRecord),
+  captureId: v.id("captureRuns"), rawStorageId: v.id("_storage"), records: v.array(adRecord), errorMessage: v.optional(v.string()),
 }, returns: v.object({ recordCount: v.number(), newCreativeUrls: v.array(v.string()) }), handler: async (ctx, args) => {
   const capture = await ctx.db.get(args.captureId);
   if (!capture) throw new Error("Capture was not found.");
@@ -51,7 +51,7 @@ export const completeAdsCapture = internalMutation({ args: {
   const priorCreativeIds = new Set(priorRecords.map(item => item.creativeId));
   const priorAdvertiserIds = new Set(priorRecords.map(item => item.advertiserId));
   for (const record of args.records) await ctx.db.insert("adCreatives", { ...record, raceId: capture.raceId, captureId: capture._id });
-  await ctx.db.patch(capture._id, { status: "succeeded", rawStorageId: args.rawStorageId, resultCount: args.records.length, errorMessage: undefined });
+  await ctx.db.patch(capture._id, { status: "succeeded", rawStorageId: args.rawStorageId, resultCount: args.records.length, errorMessage: args.errorMessage });
 
   const newRecords = args.records.filter(item => !priorCreativeIds.has(item.creativeId));
   const newCreativeUrls = newRecords.map(item => item.detailsLink);
@@ -81,7 +81,7 @@ const newsRecord = v.object({ title: v.string(), outlet: v.string(), url: v.stri
 
 export const completeNewsCapture = internalMutation({ args: {
   captureId: v.id("captureRuns"), rawStorageId: v.id("_storage"), records: v.array(newsRecord),
-}, returns: v.object({ recordCount: v.number(), newNewsUrls: v.array(v.string()) }), handler: async (ctx, args) => {
+}, returns: v.object({ recordCount: v.number(), newNewsUrls: v.array(v.string()), hasPriorSnapshot: v.boolean() }), handler: async (ctx, args) => {
   const capture = await ctx.db.get(args.captureId);
   if (!capture) throw new Error("Capture was not found.");
   const priorCapture = (await ctx.db.query("captureRuns").withIndex("by_race_source_captured", q => q.eq("raceId", capture.raceId)).collect())
@@ -90,7 +90,7 @@ export const completeNewsCapture = internalMutation({ args: {
   const priorUrls = new Set(priorCapture ? (await ctx.db.query("newsItems").withIndex("by_capture", q => q.eq("captureId", priorCapture._id)).collect()).map(item => item.url) : []);
   for (const record of args.records) await ctx.db.insert("newsItems", { ...record, raceId: capture.raceId, captureId: capture._id });
   await ctx.db.patch(capture._id, { status: "succeeded", rawStorageId: args.rawStorageId, resultCount: args.records.length, errorMessage: undefined });
-  return { recordCount: args.records.length, newNewsUrls: args.records.filter(item => !priorUrls.has(item.url)).map(item => item.url) };
+  return { recordCount: args.records.length, newNewsUrls: args.records.filter(item => !priorUrls.has(item.url)).map(item => item.url), hasPriorSnapshot: Boolean(priorCapture) };
 } });
 
 const trendRecord = v.object({ term: v.string(), latestValue: v.optional(v.number()), isPartial: v.boolean() });
@@ -116,6 +116,13 @@ export const detectQualifiedIssueContext = internalMutation({ args: {
     evidenceUrls: args.newNewsUrls, createdAt: Date.now(),
   });
   return true;
+} });
+
+export const removeBaselineIssueContext = internalMutation({ args: { captureId: v.id("captureRuns") }, returns: v.number(), handler: async (ctx, args) => {
+  const changes = await ctx.db.query("evidenceChanges").filter(q => q.eq(q.field("captureId"), args.captureId)).collect();
+  const incorrectBaselineFlags = changes.filter(change => change.kind === "issue_context");
+  for (const change of incorrectBaselineFlags) await ctx.db.delete(change._id);
+  return incorrectBaselineFlags.length;
 } });
 
 export const getWisconsinRadar = query({ args: {}, returns: v.any(), handler: async (ctx) => {

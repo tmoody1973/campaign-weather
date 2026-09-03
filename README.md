@@ -45,9 +45,9 @@ Add `SERPAPI_API_KEY` and `OPENAI_API_KEY` only to Convex server environment var
 
 ## Live refresh contract
 
-`ingestion:refreshWisconsin` is the standalone Wisconsin capture pipeline. It checks SerpApi's free Account API first, records the remaining-search snapshot in Convex, and refuses a refresh that would reduce the account below a 40-search reserve. A successful pass makes at most three charged requests: one Google Ads Transparency Center query with both verified advertiser IDs, one Google News request, and one Google Trends comparison. It stores each raw provider response privately in Convex storage, then writes normalized evidence records with their public source links.
+`ingestion:refreshWisconsin` is the standalone Wisconsin capture pipeline. It checks SerpApi's free Account API first, records the remaining-search snapshot in Convex, and refuses a refresh that would reduce the account below a 40-search reserve. A successful pass makes at most four charged requests: one Google Ads Transparency Center query for each verified advertiser, one Google News request, and one Google Trends comparison. It stores each raw provider response privately in Convex storage, then writes normalized evidence records with their public source links.
 
-The pipeline is intentionally partial-source tolerant: an Ads, News, or Trends failure is recorded as a failed capture without turning the other sources into false zeros. On later successful snapshots, its transparent rules retain and label new creative IDs, new verified advertisers, a two-times aggregate maximum-view-range increase, and a qualified context flag. None of these signals makes a claim about unique reach, voter opinion, or causation.
+The pipeline is intentionally partial-source tolerant: an Ads, News, or Trends failure is recorded as a failed capture without turning the other sources into false zeros. The first successful capture is always a baseline. Only later comparable snapshots can retain and label new creative IDs, new verified advertisers, a two-times aggregate maximum-view-range increase, or a qualified context flag. None of these signals makes a claim about unique reach, voter opinion, or causation.
 
 ## Guardrails
 

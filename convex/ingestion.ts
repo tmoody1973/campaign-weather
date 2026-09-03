@@ -104,32 +104,41 @@ export const refreshWisconsin = action({ args: {}, returns: v.any(), handler: as
   const candidateByAdvertiserId = new Map<string, string>(race.candidates.map((candidate: { advertiserId: string; name: string }) => [candidate.advertiserId, candidate.name]));
   const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", "");
-  const adsParameters = { engine: "google_ads_transparency_center", advertiser_id: race.candidates.map((candidate: { advertiserId: string }) => candidate.advertiserId).join(","), political_ads: "true", region: "2840", start_date: thirtyDaysAgo, end_date: today, num: "100" };
+  const adsBaseParameters = { engine: "google_ads_transparency_center", political_ads: "true", region: "2840", start_date: thirtyDaysAgo, end_date: today, num: "100" };
+  const adsSearches = race.candidates.map((candidate: { advertiserId: string; name: string }) => ({
+    candidate,
+    parameters: { ...adsBaseParameters, advertiser_id: candidate.advertiserId },
+  }));
   const newsParameters = { engine: "google", tbm: "nws", q: WISCONSIN_NEWS_QUERY, gl: "us", hl: "en" };
   const trendsParameters = { engine: "google_trends", q: WISCONSIN_TRENDS_QUERY, geo: "US-WI", date: "today 3-m", data_type: "TIMESERIES", hl: "en" };
   const [adsCaptureId, newsCaptureId, trendsCaptureId] = await Promise.all([
-    ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "ads", query: "Verified Google political advertisers: Tiffany + Crowley", parameters: adsParameters }),
+    ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "ads", query: "Verified Google political advertisers: Tiffany + Crowley", parameters: { ...adsBaseParameters, advertiser_ids: adsSearches.map(item => item.candidate.advertiserId).join(",") } }),
     ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "news", query: WISCONSIN_NEWS_QUERY, parameters: newsParameters }),
     ctx.runMutation(internal.campaignWeather.startCapture, { raceId, source: "trends", query: WISCONSIN_TRENDS_QUERY, parameters: trendsParameters }),
   ]);
 
-  const [adsResult, newsResult, trendsResult] = await Promise.allSettled([
-    getSerpApiJson(apiKey, adsParameters), getSerpApiJson(apiKey, newsParameters), getSerpApiJson(apiKey, trendsParameters),
+  const [adsResults, newsResult, trendsResult] = await Promise.all([
+    Promise.allSettled(adsSearches.map(item => getSerpApiJson(apiKey, item.parameters))),
+    getSerpApiJson(apiKey, newsParameters).then(value => ({ status: "fulfilled" as const, value }), reason => ({ status: "rejected" as const, reason })),
+    getSerpApiJson(apiKey, trendsParameters).then(value => ({ status: "fulfilled" as const, value }), reason => ({ status: "rejected" as const, reason })),
   ]);
   const outcomes: Record<string, { status: "succeeded" | "failed"; count?: number; error?: string }> = {};
   let newNewsUrls: string[] = [];
-  if (adsResult.status === "fulfilled") {
-    const rawStorageId = await storeRawPayload(ctx, adsResult.value);
-    const result = await ctx.runMutation(internal.campaignWeather.completeAdsCapture, { captureId: adsCaptureId, rawStorageId: rawStorageId as never, records: normalizeAds(adsResult.value, candidateByAdvertiserId) });
+  let hasPriorNewsSnapshot = false;
+  const successfulAds = adsResults.flatMap((result, index) => result.status === "fulfilled" ? [{ candidate: adsSearches[index].candidate, payload: result.value }] : []);
+  const failedAds = adsResults.flatMap((result, index) => result.status === "rejected" ? [`${adsSearches[index].candidate.name}: ${result.reason instanceof Error ? result.reason.message : "Ads capture failed."}`] : []);
+  if (successfulAds.length > 0) {
+    const rawStorageId = await storeRawPayload(ctx, { ads: successfulAds.map(item => ({ candidate: item.candidate.name, advertiserId: item.candidate.advertiserId, payload: item.payload })), errors: failedAds });
+    const result = await ctx.runMutation(internal.campaignWeather.completeAdsCapture, { captureId: adsCaptureId, rawStorageId: rawStorageId as never, records: successfulAds.flatMap(item => normalizeAds(item.payload, candidateByAdvertiserId)), errorMessage: failedAds.length ? `Partial advertiser capture: ${failedAds.join(" | ")}` : undefined });
     outcomes.ads = { status: "succeeded", count: result.recordCount };
   } else {
-    const error = adsResult.reason instanceof Error ? adsResult.reason.message : "Ads capture failed.";
+    const error = failedAds.join(" | ") || "Ads capture failed.";
     await ctx.runMutation(internal.campaignWeather.failCapture, { captureId: adsCaptureId, errorMessage: error }); outcomes.ads = { status: "failed", error };
   }
   if (newsResult.status === "fulfilled") {
     const rawStorageId = await storeRawPayload(ctx, newsResult.value);
     const result = await ctx.runMutation(internal.campaignWeather.completeNewsCapture, { captureId: newsCaptureId, rawStorageId: rawStorageId as never, records: normalizeNews(newsResult.value) });
-    newNewsUrls = result.newNewsUrls; outcomes.news = { status: "succeeded", count: result.recordCount };
+    newNewsUrls = result.newNewsUrls; hasPriorNewsSnapshot = result.hasPriorSnapshot; outcomes.news = { status: "succeeded", count: result.recordCount };
   } else {
     const error = newsResult.reason instanceof Error ? newsResult.reason.message : "News capture failed.";
     await ctx.runMutation(internal.campaignWeather.failCapture, { captureId: newsCaptureId, errorMessage: error }); outcomes.news = { status: "failed", error };
@@ -138,7 +147,7 @@ export const refreshWisconsin = action({ args: {}, returns: v.any(), handler: as
     const rawStorageId = await storeRawPayload(ctx, trendsResult.value);
     const count = await ctx.runMutation(internal.campaignWeather.completeTrendsCapture, { captureId: trendsCaptureId, rawStorageId: rawStorageId as never, records: normalizeTrends(trendsResult.value) });
     outcomes.trends = { status: "succeeded", count };
-    if (newNewsUrls.length >= 2) await ctx.runMutation(internal.campaignWeather.detectQualifiedIssueContext, { raceId, newsCaptureId, trendCaptureId: trendsCaptureId, newNewsUrls });
+    if (hasPriorNewsSnapshot && newNewsUrls.length >= 2) await ctx.runMutation(internal.campaignWeather.detectQualifiedIssueContext, { raceId, newsCaptureId, trendCaptureId: trendsCaptureId, newNewsUrls });
   } else {
     const error = trendsResult.reason instanceof Error ? trendsResult.reason.message : "Trends capture failed.";
     await ctx.runMutation(internal.campaignWeather.failCapture, { captureId: trendsCaptureId, errorMessage: error }); outcomes.trends = { status: "failed", error };
