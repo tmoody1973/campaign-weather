@@ -140,6 +140,23 @@ export const seedTiffanyGoogleProfileSnapshot = internalMutation({ args: {}, ret
   });
 } });
 
+export const seedCrowleyGoogleProfileSnapshot = internalMutation({ args: {}, returns: v.id("advertiserProfiles"), handler: async (ctx) => {
+  const race = await ctx.db.query("races").withIndex("by_key", q => q.eq("key", WISCONSIN.key)).unique();
+  if (!race) throw new Error("Wisconsin race must be seeded before profile evidence.");
+  const profileUrl = "https://adstransparency.google.com/advertiser/AR00233328882948767745?region=US&topic=political&preset-date=Last+30+days";
+  const existing = (await ctx.db.query("advertiserProfiles").withIndex("by_race_captured", q => q.eq("raceId", race._id)).collect())
+    .find(item => item.source === "public_google_profile_snapshot" && item.advertiserId === "AR00233328882948767745" && item.scopeLabel === "United States · last 30 days");
+  if (existing) return existing._id;
+  return await ctx.db.insert("advertiserProfiles", {
+    raceId: race._id, candidateName: "David Crowley", advertiserName: "Crowley for Wisconsin", advertiserId: "AR00233328882948767745", profileUrl,
+    source: "public_google_profile_snapshot", scopeLabel: "United States · last 30 days", reportedSpend: 221600, currency: "USD", reportedAdCount: 7,
+    regionalSpend: [{ region: "Wisconsin", reportedSpend: 221000, reportedLabel: "$221K" }],
+    formatBreakdown: [{ format: "Video", percent: 95.2, reportedSpend: 211000, reportedLabel: "$211K" }, { format: "Text", percent: 4.84, reportedSpend: 10700, reportedLabel: "$10.7K" }],
+    delayNote: "Google labels this overview continuously updated and notes that it may have a few hours of delay.", capturedAt: Date.now(),
+    dataQualityNote: "Read from the source-linked public Google Ads Transparency Center advertiser Insights view on 2026-09-03. Scope is United States and last 30 days. This is a provider profile snapshot, not a sum of creative-level ranges or a SerpApi-calculated total.",
+  });
+} });
+
 export const getWisconsinRadar = query({ args: {}, returns: v.any(), handler: async (ctx) => {
   const race = await ctx.db.query("races").withIndex("by_key", q => q.eq("key", WISCONSIN.key)).unique();
   if (!race) return null;
