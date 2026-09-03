@@ -125,18 +125,34 @@ export const removeBaselineIssueContext = internalMutation({ args: { captureId: 
   return incorrectBaselineFlags.length;
 } });
 
+export const seedTiffanyGoogleProfileSnapshot = internalMutation({ args: {}, returns: v.id("advertiserProfiles"), handler: async (ctx) => {
+  const race = await ctx.db.query("races").withIndex("by_key", q => q.eq("key", WISCONSIN.key)).unique();
+  if (!race) throw new Error("Wisconsin race must be seeded before profile evidence.");
+  const profileUrl = "https://adstransparency.google.com/advertiser/AR15612586122486480897?region=US&topic=political";
+  const existing = (await ctx.db.query("advertiserProfiles").withIndex("by_race_captured", q => q.eq("raceId", race._id)).collect())
+    .find(item => item.source === "public_google_profile_snapshot" && item.advertiserId === "AR15612586122486480897" && item.scopeLabel === "United States · any time");
+  if (existing) return existing._id;
+  return await ctx.db.insert("advertiserProfiles", {
+    raceId: race._id, candidateName: "Tom Tiffany", advertiserName: "Tiffany for Wisconsin", advertiserId: "AR15612586122486480897", profileUrl,
+    source: "public_google_profile_snapshot", scopeLabel: "United States · any time", reportedSpend: 1906600, currency: "USD", reportedAdCount: 37,
+    delayNote: "Google labels this overview continuously updated and notes that it may have a few hours of delay.", capturedAt: Date.now(),
+    dataQualityNote: "Transcribed from a source-linked public Google Ads Transparency Center overview supplied for Campaign Weather on 2026-09-03. This is a provider profile snapshot, not a sum of creative-level ranges or a SerpApi-calculated total.",
+  });
+} });
+
 export const getWisconsinRadar = query({ args: {}, returns: v.any(), handler: async (ctx) => {
   const race = await ctx.db.query("races").withIndex("by_key", q => q.eq("key", WISCONSIN.key)).unique();
   if (!race) return null;
   const captures = await ctx.db.query("captureRuns").withIndex("by_race_source_captured", q => q.eq("raceId", race._id)).collect();
   const latest = (source: "ads" | "news" | "trends") => captures.filter(c => c.source === source && c.status === "succeeded").sort((a,b) => b.capturedAt - a.capturedAt)[0];
   const ads = latest("ads"), news = latest("news"), trends = latest("trends");
-  const [creatives, newsItems, trendItems, changes, budget] = await Promise.all([
+  const [creatives, advertiserProfiles, newsItems, trendItems, changes, budget] = await Promise.all([
     ads ? ctx.db.query("adCreatives").withIndex("by_capture", q => q.eq("captureId", ads._id)).collect() : [],
+    ctx.db.query("advertiserProfiles").withIndex("by_race_captured", q => q.eq("raceId", race._id)).order("desc").take(24),
     news ? ctx.db.query("newsItems").withIndex("by_capture", q => q.eq("captureId", news._id)).collect() : [],
     trends ? ctx.db.query("trendObservations").withIndex("by_capture", q => q.eq("captureId", trends._id)).collect() : [],
     ctx.db.query("evidenceChanges").withIndex("by_race_created", q => q.eq("raceId", race._id)).order("desc").take(24),
     ctx.db.query("searchBudgets").withIndex("by_checked").order("desc").first(),
   ]);
-  return { race, captures: { ads: ads ?? null, news: news ?? null, trends: trends ?? null }, creatives, newsItems, trendItems, changes, budget };
+  return { race, captures: { ads: ads ?? null, news: news ?? null, trends: trends ?? null }, creatives, advertiserProfiles, newsItems, trendItems, changes, budget };
 } });
