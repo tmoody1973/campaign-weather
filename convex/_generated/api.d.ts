@@ -8,7 +8,9 @@
  * @module
  */
 
+import type * as briefs from "../briefs.js";
 import type * as campaignWeather from "../campaignWeather.js";
+import type * as creativeDetails from "../creativeDetails.js";
 import type * as ingestion from "../ingestion.js";
 
 import type {
@@ -18,7 +20,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  briefs: typeof briefs;
   campaignWeather: typeof campaignWeather;
+  creativeDetails: typeof creativeDetails;
   ingestion: typeof ingestion;
 }>;
 

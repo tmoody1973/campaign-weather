@@ -20,10 +20,11 @@ Convex stores raw capture references and normalized evidence. Deterministic comp
 ## Product experience
 
 1. **Voter Radar** — separate Ads, News, and Search layers; no composite score or voter-inference claims.
-2. **Ad Passport** — a source-linked public creative record with advertiser attribution, available ranges, retrieval provenance, and limitations.
-3. **Press Desk** — evidence ledger, transparent reportability rules, provenance detail, and exportable source bundle.
+2. **Living Brief** — a source-bound, plain-English reading of the stored snapshot. It states what changed, what to check next, and what cannot be concluded.
+3. **Ad Passport** — a source-linked public creative record with advertiser attribution, available ranges, retrieval provenance, and limitations. Public creative copy/media is requested only when a visitor clicks Inspect.
+4. **Press Desk** — evidence ledger, transparent reportability rules, provenance detail, and exportable source bundle.
 
-The initial vertical slice is Wisconsin Governor 2026: Tom Tiffany and David Crowley.
+The initial vertical slice is Wisconsin Governor 2026: Tom Tiffany and David Crowley. The live-demo selector also includes Ohio, Michigan, and Texas governor races plus Michigan, Maine, Illinois, and Minnesota U.S. Senate races; each is enabled only with two verified advertiser IDs.
 
 The repository also includes a versioned national 2026 research manifest in [`data/campaign-weather-race-manifest-2026.json`](data/campaign-weather-race-manifest-2026.json), with its [source register](docs/research/campaign-weather-race-manifest-2026-sources.md). It contains 82 research-input races and only marks resolved advertiser IDs as eligible for capture.
 
@@ -47,11 +48,20 @@ Add `SERPAPI_API_KEY` and `OPENAI_API_KEY` only to Convex server environment var
 
 ## Live refresh contract
 
-`ingestion:refreshRace` is the standalone live-capture pipeline. The Voter Radar exposes four curated, manifest-backed demo races with two verified advertiser IDs each: Wisconsin, Ohio, Michigan, and Texas governor. Before it captures, the pipeline checks SerpApi's free Account API, records the remaining-search snapshot in Convex, and refuses a refresh that would reduce the account below a 40-search reserve. A successful pass makes at most four charged requests: one Google Ads Transparency Center query for each verified advertiser, one Google News request, and one Google Trends comparison. It stores each raw provider response privately in Convex storage, then writes normalized evidence records with their public source links.
+`ingestion:refreshRace` is the standalone live-capture pipeline. The Voter Radar exposes eight curated, manifest-backed demo races with two verified advertiser IDs each. Before it captures, the pipeline checks SerpApi's free Account API, records the remaining-search snapshot in Convex, and refuses a refresh that would reduce the account below a 40-search reserve. A successful pass makes at most four charged requests: one Google Ads Transparency Center query for each verified advertiser, one Google News request, and one Google Trends comparison. It stores each raw provider response privately in Convex storage, then writes normalized evidence records with their public source links.
 
 The pipeline is intentionally partial-source tolerant: an Ads, News, or Trends failure is recorded as a failed capture without turning the other sources into false zeros. The first successful capture is always a baseline. Only later comparable snapshots can retain and label new creative IDs, new verified advertisers, a two-times aggregate maximum-view-range increase, or a qualified context flag. None of these signals makes a claim about unique reach, voter opinion, or causation.
 
 For every candidate, the UI keeps two adjacent but distinct readings: the **Candidate Ad Ledger** is a source-linked advertiser-profile snapshot whose scope and delay caveat stay visible; the **Creative Fieldbook** contains individual creative ranges. Creative-level spend or shown ranges are never added up to make a false campaign total.
+
+The on-demand `creativeDetails:fetchPublicCreativeDetails` action uses one additional SerpApi Google Ads Transparency Center Ad Details request only after an Inspect click. It stores the raw response and, when the provider supplies them, displays public headline, snippet, call-to-action, destination, thumbnail, or video fields alongside—not in place of—the original source record.
+
+## Deploy to Vercel
+
+1. Import this GitHub repository into Vercel.
+2. Set `NEXT_PUBLIC_CONVEX_URL` in Vercel to the Convex deployment URL (safe to expose to the browser).
+3. Keep `SERPAPI_API_KEY` and `OPENAI_API_KEY` in the Convex deployment environment only—never in Vercel client variables.
+4. Deploy. Vercel hosts the Next.js UI; Convex serves the live queries and server-side actions.
 
 ## Guardrails
 
@@ -62,4 +72,4 @@ For every candidate, the UI keeps two adjacent but distinct readings: the **Cand
 
 ## Status
 
-The standalone Convex project, Wisconsin manifest, quota guard, raw-capture storage, source-specific normalization, and deterministic snapshot rules are configured. The remaining milestones are wiring these live records into the Field Station Voter Radar and Press Desk, then adding the constrained Evidence Investigator.
+The standalone Field Station UI, Wisconsin live capture, public advertiser profiles, all-candidate evidence ledger, quota guard, raw-capture storage, on-demand creative details, constrained living brief, and Press Desk are implemented. For a working AI brief, configure `OPENAI_API_KEY` (exact name) in the same Convex deployment that serves the app.
