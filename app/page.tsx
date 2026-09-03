@@ -1101,6 +1101,13 @@ function VoterRadar() {
           </select>
         </label>
         <div className="topbar-actions">
+          <button
+            className="press-link"
+            onClick={() => setPressDesk(true)}
+            title="Open the reporter workspace"
+          >
+            Press Desk
+          </button>
           <a className="about-link" href="/about">
             What is this?
           </a>
