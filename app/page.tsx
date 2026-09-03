@@ -145,6 +145,51 @@ function FormatMark({ format }: { format: string }) {
   return <span className="format-mark format-word">{format}</span>;
 }
 
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("");
+}
+
+function CandidatePortrait({
+  name,
+  photo,
+  compact = false,
+}: {
+  name: string;
+  photo?: AnyRecord | null;
+  compact?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const className = `candidate-portrait ${compact ? "compact" : ""}`;
+  if (photo?.imageUrl && !failed) {
+    return (
+      <a
+        className={className}
+        href={photo.sourcePageUrl}
+        target="_blank"
+        rel="noreferrer"
+        title={`Source-linked candidate portrait (${photo.status.replaceAll("_", " ")})`}
+        aria-label={`Open ${name}'s portrait source`}
+      >
+        <img src={photo.imageUrl} alt={name} onError={() => setFailed(true)} />
+      </a>
+    );
+  }
+  return (
+    <span
+      className={`${className} unavailable`}
+      title="No candidate portrait is available in the supplied manifest."
+      aria-label={`${name}: portrait unavailable in the supplied manifest`}
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
 function LivingBrief({
   brief,
   onRefresh,
@@ -599,10 +644,11 @@ function VoterRadar() {
   const trendScope = activeDemo
     ? `${activeDemo.state} · ${activeDemo.trendWindow ?? "Last 3 months"}`
     : "Selected race · Last 3 months";
-  const candidates =
-    radar?.race?.candidates ??
-    activeDemo?.candidates?.map((name: string) => ({ name })) ??
-    [];
+  const candidates = radar?.race?.candidates ?? activeDemo?.candidates ?? [];
+  const photoForCandidate = (name: string) =>
+    activeDemo?.candidates?.find(
+      (candidate: AnyRecord) => candidate.name === name,
+    )?.photo ?? null;
   const ads = radar?.creatives ?? [];
   const news = radar?.newsItems ?? [];
   const trends = radar?.trendItems ?? [];
@@ -734,6 +780,16 @@ function VoterRadar() {
           <small>
             {candidates.map((item: AnyRecord) => item.name).join(" / ")}
           </small>
+          <span className="race-portraits" aria-label="Candidate portraits">
+            {candidates.map((item: AnyRecord) => (
+              <CandidatePortrait
+                key={item.name}
+                name={item.name}
+                photo={photoForCandidate(item.name)}
+                compact
+              />
+            ))}
+          </span>
         </div>
         <div className="capture">
           <i />
@@ -930,6 +986,11 @@ function VoterRadar() {
                     className={candidate === item.name ? "selected" : ""}
                     onClick={() => setCandidate(item.name)}
                   >
+                    <CandidatePortrait
+                      name={item.name}
+                      photo={photoForCandidate(item.name)}
+                      compact
+                    />
                     {item.name}{" "}
                     <span>
                       {

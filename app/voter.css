@@ -307,6 +307,47 @@
 .issue-result b {
   color: #006879;
 }
+.race-portraits {
+  display: flex;
+  margin-top: 7px;
+}
+.candidate-portrait {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #72d8dc;
+  border-radius: 50%;
+  background: #0b2632;
+  color: #d7eded;
+  font:
+    10px ui-monospace,
+    monospace;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+.candidate-portrait + .candidate-portrait {
+  margin-left: -7px;
+}
+.candidate-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.candidate-portrait.unavailable {
+  background: #254c55;
+  color: #dfe8e6;
+}
+.candidate-tabs .candidate-portrait {
+  width: 22px;
+  height: 22px;
+  margin: -4px 5px -4px -5px;
+  vertical-align: middle;
+}
+.candidate-tabs .candidate-portrait + .candidate-portrait {
+  margin-left: -7px;
+}
 .drawer-detail-fetch {
   width: 100%;
   margin-top: 16px;

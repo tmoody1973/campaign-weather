@@ -12,6 +12,7 @@ import type * as briefs from "../briefs.js";
 import type * as campaignWeather from "../campaignWeather.js";
 import type * as creativeDetails from "../creativeDetails.js";
 import type * as ingestion from "../ingestion.js";
+import type * as portraitSearch from "../portraitSearch.js";
 
 import type {
   ApiFromModules,
@@ -24,6 +25,7 @@ declare const fullApi: ApiFromModules<{
   campaignWeather: typeof campaignWeather;
   creativeDetails: typeof creativeDetails;
   ingestion: typeof ingestion;
+  portraitSearch: typeof portraitSearch;
 }>;
 
 /**

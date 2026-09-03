@@ -164,6 +164,128 @@ const DEMO_RACES = {
   },
 } as const;
 
+// These are the supplied, source-linked candidateImage values from the versioned
+// Manus manifest. A missing entry intentionally renders as a monogram, not a
+// guessed image or a new paid search.
+const DEMO_CANDIDATE_PHOTOS: Record<
+  string,
+  Record<string, { imageUrl: string; sourcePageUrl: string; status: string }>
+> = {
+  "wi-governor-2026": {
+    "David Crowley": {
+      imageUrl: "/portraits/david-crowley.jpeg",
+      sourcePageUrl: "https://www.crowleyforwi.com/",
+      status: "supplied_official_photo",
+    },
+    "Tom Tiffany": {
+      imageUrl:
+        "https://tomtiffany.com/wp-content/uploads/2025/09/TomTiffany.png",
+      sourcePageUrl: "https://tomtiffany.com/",
+      status: "verified_official_campaign",
+    },
+  },
+  "oh-governor-2026": {
+    "Amy Acton": {
+      imageUrl:
+        "https://actonforgovernor.com/wp-content/uploads/2026/07/image-7.jpeg",
+      sourcePageUrl:
+        "https://actonforgovernor.com/amy-acton-makes-rural-swing-throughout-western-ohio/",
+      status: "serpapi_verified_official_domain",
+    },
+    "Vivek Ramaswamy": {
+      imageUrl:
+        "https://vivekforohio.com/wp-content/uploads/2025/12/Vivek_Ramaswamy_Headshot-1.png",
+      sourcePageUrl: "https://vivekforohio.com/media-kit/",
+      status: "verified_official_campaign",
+    },
+  },
+  "mi-governor-2026": {
+    "Jocelyn Benson": {
+      imageUrl:
+        "https://www.michigan.gov/sos/-/media/Project/Websites/sos/Resources/Secretary-of-State/Benson/SOS_Jocelyn_Benson_web.jpg",
+      sourcePageUrl:
+        "https://www.michigan.gov/sos/resources/the-secretary-of-state",
+      status: "verified_official_government",
+    },
+    "John James": {
+      imageUrl:
+        "https://johnjamesmi.com/wp-content/uploads/2025/09/Copy-of-DSC_0873.jpg",
+      sourcePageUrl: "https://johnjamesmi.com/about-john-james/",
+      status: "verified_official_campaign",
+    },
+  },
+  "tx-governor-2026": {
+    "Gina Hinojosa": {
+      imageUrl:
+        "https://ginafortexas.com/wp-content/uploads/2026/05/GH-Launch-AB-Meta-1200x630-3.png",
+      sourcePageUrl: "https://ginafortexas.com/",
+      status: "verified_official_campaign",
+    },
+    "Greg Abbott": {
+      imageUrl:
+        "https://www.gregabbott.com/wp-content/uploads/2025/11/8I6A7261-3.jpg",
+      sourcePageUrl: "https://www.gregabbott.com/",
+      status: "verified_official_campaign",
+    },
+  },
+  "mi-senate-2026": {
+    "Abdul El-Sayed": {
+      imageUrl:
+        "https://abdulforsenate.com/wp-content/uploads/2025/04/Mask-Group.png",
+      sourcePageUrl: "https://abdulforsenate.com/",
+      status: "verified_official_campaign",
+    },
+    "Mike Rogers": {
+      imageUrl:
+        "https://images.squarespace-cdn.com/content/v1/65ef633c0132364ea5b0285f/b7b2c921-14c5-4cbc-b940-28829aca3574/Screen+Shot+2024-02-20+at+12.24.48+PM.png",
+      sourcePageUrl: "https://rogersforsenate.com/meet-mike",
+      status: "serpapi_verified_official_domain",
+    },
+  },
+  "me-senate-2026": {
+    "Troy D. Jackson": {
+      imageUrl:
+        "https://run.imgix.net/61cfa6b5-77cc-468d-b36c-b302654b60f4/3aafba5d-3c7a-4143-b73f-ae0fea64461a/3aafba5d-3c7a-4143-b73f-ae0fea64461a.jpg?ixlib=js-3.8.0&bri=0&con=0&sat=0&high=0&shad=0&usm=0&rect=0%2C0%2C3072%2C1728&w=1500",
+      sourcePageUrl: "https://www.jacksonformaine.com/about",
+      status: "serpapi_verified_official_domain",
+    },
+    "Susan M. Collins": {
+      imageUrl:
+        "https://www.collins.senate.gov/imo/media/image/Sen.%20Collins'%20Official%20Photo.jpg",
+      sourcePageUrl: "https://www.collins.senate.gov/",
+      status: "verified_official_government",
+    },
+  },
+  "il-senate-2026": {
+    "Juliana Stratton": {
+      imageUrl:
+        "https://ltgov.illinois.gov/content/dam/soi/en/web/ltgov/images/lt-gov-stratton-headshot.jpg",
+      sourcePageUrl: "https://ltgov.illinois.gov/",
+      status: "verified_official_government",
+    },
+    "Don Tracy": {
+      imageUrl:
+        "https://dontracyforil.com/wp-content/uploads/2026/07/tracy-headshot-final.jpg",
+      sourcePageUrl: "https://dontracyforil.com/",
+      status: "verified_official_campaign",
+    },
+  },
+  "mn-senate-2026": {
+    "Peggy Flanagan": {
+      imageUrl:
+        "https://peggyflanagan.com/wp-content/uploads/2025/02/014-Peggy-Flanagan-1024x683.webp",
+      sourcePageUrl: "https://peggyflanagan.com/",
+      status: "verified_official_campaign",
+    },
+    "Michele Tafoya": {
+      imageUrl:
+        "https://micheletafoya.com/wp-content/uploads/2026/01/Tafoya_Photo-1024x1024.jpg",
+      sourcePageUrl: "https://micheletafoya.com/",
+      status: "verified_official_campaign",
+    },
+  },
+};
+
 const WISCONSIN = DEMO_RACES["wi-governor-2026"];
 
 export const seedWisconsin = internalMutation({
@@ -221,7 +343,10 @@ export const listDemoRaces = query({
       trendGeo: race.trendGeo,
       trendWindow: "Last 3 months",
       electionDate: race.electionDate,
-      candidates: race.candidates.map((candidate) => candidate.name),
+      candidates: race.candidates.map((candidate) => ({
+        name: candidate.name,
+        photo: DEMO_CANDIDATE_PHOTOS[race.key]?.[candidate.name] ?? null,
+      })),
       estimatedSearches: 4,
     })),
 });
