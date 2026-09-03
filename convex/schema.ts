@@ -144,6 +144,21 @@ export default defineSchema({
     outcome: v.union(v.literal("answer"), v.literal("refusal")),
     headline: v.optional(v.string()),
     plainSummary: v.optional(v.string()),
+    sections: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          body: v.string(),
+          supportingEvidence: v.array(
+            v.object({
+              recordId: v.string(),
+              title: v.string(),
+              sourceUrl: v.string(),
+            }),
+          ),
+        }),
+      ),
+    ),
     whatChanged: v.string(),
     watchNext: v.optional(v.string()),
     supportingEvidence: v.array(

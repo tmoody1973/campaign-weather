@@ -227,6 +227,33 @@ function LivingBrief({
         <>
           <h3>{brief.headline}</h3>
           <p className="brief-summary">{brief.plainSummary}</p>
+          {brief.sections?.length > 0 && (
+            <section
+              className="brief-reader-sections"
+              aria-label="Reader's brief"
+            >
+              {brief.sections.map((section: AnyRecord) => (
+                <article key={section.label}>
+                  <h4>{section.label}</h4>
+                  <p>{section.body}</p>
+                  {section.supportingEvidence?.length > 0 && (
+                    <div>
+                      {section.supportingEvidence.map((source: AnyRecord) => (
+                        <a
+                          key={source.recordId}
+                          href={source.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {source.title} ↗
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </article>
+              ))}
+            </section>
+          )}
           <dl className="brief-facts">
             <div>
               <dt>What changed</dt>
