@@ -813,6 +813,21 @@ function VoterRadar() {
       : layer === "news"
         ? news.length
         : trends.length;
+  const currentLayerSummary =
+    layer === "ads"
+      ? {
+          title: `${total} campaign ad${total === 1 ? "" : "s"} to look at`,
+          description: "See what each campaign is putting online.",
+        }
+      : layer === "news"
+        ? {
+            title: `${total} local news stor${total === 1 ? "y" : "ies"}`,
+            description: "Read what reporters are saying about the race.",
+          }
+        : {
+            title: `${total} candidate-name check${total === 1 ? "" : "s"}`,
+            description: "A small clue about curiosity, not a vote count.",
+          };
   const selectedProfile = activeDrawer
     ? (radar?.advertiserProfiles ?? []).find(
         (profile: AnyRecord) =>
@@ -919,7 +934,7 @@ function VoterRadar() {
         </div>
         <div className="capture">
           <i />
-          PUBLIC EVIDENCE, NOT PREDICTION
+          FACTS YOU CAN CHECK · NO PREDICTIONS
         </div>
         <label className="race-switch">
           <span className="sr-only">Choose a demo race</span>
@@ -970,61 +985,50 @@ function VoterRadar() {
         <section className="voter-page">
           <div className="voter-hero">
             <div>
-              <h1>See what campaigns are putting into public view.</h1>
+              <h1>Know what’s happening in your race.</h1>
               <p className="hero-copy">
-                Start with public ads, then read the reporting and search
-                context around the race. Campaign Weather never tells you who to
-                support or who will win.
+                See campaign ads, local news, and what people are searching for
+                in one place. Campaign Weather helps you look at the facts—it
+                never tells you who to vote for.
               </p>
             </div>
             <aside className="how-to">
-              <b>How to use this</b>
+              <b>Start here</b>
               <ol>
-                <li>Read the living brief.</li>
-                <li>Open the sources behind it.</li>
-                <li>Decide what matters to you.</li>
+                <li>Get the quick story.</li>
+                <li>Look at the ads and news.</li>
+                <li>Make up your own mind.</li>
               </ol>
             </aside>
           </div>
           <section className="snapshot-strip">
             <article>
-              <span>WHAT WE FOUND</span>
-              <b>
-                {total}{" "}
-                {layer === "ads"
-                  ? "public ad records"
-                  : layer === "news"
-                    ? "news records"
-                    : "search readings"}
-              </b>
-              <p>
-                From the latest{" "}
-                {layers.find((item) => item.key === layer)?.label.toLowerCase()}{" "}
-                capture.
-              </p>
+              <span>IN THIS UPDATE</span>
+              <b>{currentLayerSummary.title}</b>
+              <p>{currentLayerSummary.description}</p>
             </article>
             <article>
-              <span>WHAT IT MEANS</span>
+              <span>WHAT THIS APP DOES</span>
               <b>
                 {radar?.captures?.ads
-                  ? "A snapshot, not a verdict"
-                  : "No snapshot yet"}
+                  ? "It helps you check the facts."
+                  : "It starts with public information."}
               </b>
               <p>
                 {radar?.captures?.ads
-                  ? "A second comparable capture is needed before Campaign Weather labels a change."
-                  : "Use Fetch race to begin with verified public sources."}
+                  ? "Use the story and source links to learn more."
+                  : "Choose a race and we’ll show what is publicly available."}
               </p>
             </article>
             <article>
-              <span>LAST CAPTURE</span>
+              <span>LAST UPDATED</span>
               <b>
                 {formatDate(
                   radar?.captures?.[layer === "search" ? "trends" : layer]
                     ?.capturedAt,
                 )}
               </b>
-              <p>All raw provider records are retained for comparison.</p>
+              <p>Based on public campaign and news information.</p>
             </article>
           </section>
           <LivingBrief
