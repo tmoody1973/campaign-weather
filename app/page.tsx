@@ -8,6 +8,7 @@ import {
   useQuery,
 } from "convex/react";
 import { api } from "../convex/_generated/api";
+import "./press-desk.css";
 
 type Layer = "ads" | "news" | "search";
 type AnyRecord = Record<string, any>;
@@ -641,103 +642,245 @@ function SearchContext({
 
 function PressDesk({
   radar,
+  brief,
   onReturn,
 }: {
   radar: AnyRecord | null | undefined;
+  brief: AnyRecord | null | undefined;
   onReturn: () => void;
 }) {
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const reportable = (radar?.changes ?? []).filter(
     (change: AnyRecord) => change.reportable,
   );
+  const raceName = radar?.race?.name ?? "Selected race";
+  const latestCapture = radar?.captures?.ads?.capturedAt;
+  const sourceByUrl = new Map<string, AnyRecord>();
+  for (const source of brief?.supportingEvidence ?? []) {
+    sourceByUrl.set(source.sourceUrl, source);
+  }
+  for (const change of reportable) {
+    for (const sourceUrl of change.evidenceUrls ?? []) {
+      if (!sourceByUrl.has(sourceUrl)) {
+        sourceByUrl.set(sourceUrl, {
+          recordId: sourceUrl,
+          sourceUrl,
+          title: "Public source record",
+        });
+      }
+    }
+  }
+  const evidencePack = [...sourceByUrl.values()];
+  const candidateAdSummary = (radar?.race?.candidates ?? []).map(
+    (candidate: AnyRecord) => {
+      const records = (radar?.creatives ?? []).filter(
+        (creative: AnyRecord) => creative.candidateName === candidate.name,
+      );
+      return {
+        ...candidate,
+        count: records.length,
+        formats: [
+          ...new Set(records.map((record: AnyRecord) => record.format)),
+        ],
+        sourceUrl: records[0]?.detailsLink,
+      };
+    },
+  );
+  const issueLead = issueDefinitions.find((issue) =>
+    (radar?.newsItems ?? []).some((item: AnyRecord) =>
+      matchesIssue(item, issue.key),
+    ),
+  );
+  const storyLead =
+    brief?.headline ??
+    (reportable.length
+      ? "A source-backed change is ready for review"
+      : "No confirmed change since the last comparable check");
+  const storyDeck =
+    brief?.plainSummary ??
+    "Campaign Weather has stored public campaign and reporting records for this race. Open the evidence below before making a reporting claim.";
+  const reporterNote = [
+    `Campaign Weather reporter briefing: ${raceName}`,
+    "",
+    storyLead,
+    storyDeck,
+    "",
+    `What changed: ${brief?.whatChanged ?? "No reportable change has been confirmed."}`,
+    `Limit: ${brief?.cannotConclude ?? "Public records do not establish voter opinion, reach, or impact."}`,
+    "",
+    "Source links:",
+    ...evidencePack.map((source) => `- ${source.title}: ${source.sourceUrl}`),
+  ].join("\n");
+  async function copyReporterNote() {
+    try {
+      await navigator.clipboard.writeText(reporterNote);
+      setCopyStatus("Reporter note copied with source links.");
+    } catch {
+      setCopyStatus("Copy was blocked. Select the source links below instead.");
+    }
+  }
   return (
-    <section className="press-desk">
-      <div className="press-header">
+    <section className="reporter-desk">
+      <div className="reporter-header">
         <div>
-          <span>PRESS DESK / SOURCE-BOUND REPORTING</span>
-          <h1>{radar?.race?.state ?? "Race"} evidence ledger</h1>
-        </div>
-        <button onClick={onReturn}>← Return to Voter Radar</button>
-      </div>
-      <div className="press-layout">
-        <article className="ledger">
-          <div className="ledger-bar">
-            <b>Reportable changes</b>
-            <small>Thresholds are visible. Nothing is inferred.</small>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>CHANGE</th>
-                <th>EVIDENCE</th>
-                <th>RULE</th>
-                <th>STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reportable.length ? (
-                reportable.map((change: AnyRecord) => (
-                  <tr key={change._id}>
-                    <td>
-                      <span className="change-dot" />
-                      {change.kind.replaceAll("_", " ")}
-                    </td>
-                    <td>
-                      {change.evidenceUrls?.length ?? 0} direct source record
-                      {change.evidenceUrls?.length === 1 ? "" : "s"}
-                    </td>
-                    <td>{change.rule}</td>
-                    <td>Reportable</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td>
-                    <span className="change-dot" />
-                    Baseline / no qualified change
-                  </td>
-                  <td>Stored public source records</td>
-                  <td>
-                    Requires a second comparable snapshot and a stated
-                    threshold.
-                  </td>
-                  <td>Not reportable</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </article>
-        <aside className="investigator">
-          <span>CONSTRAINED AI BRIEF</span>
-          <h2>What public campaign activity changed?</h2>
-          <div>
-            <b>WHAT CHANGED</b>
-            <p>
-              {reportable.length
-                ? `${reportable.length} threshold-qualified change${reportable.length === 1 ? " was" : "s were"} retained in the source ledger.`
-                : "No reportable change has been confirmed. The first valid capture establishes a comparison baseline."}
-            </p>
-          </div>
-          <div>
-            <b>WHAT SUPPORTS THIS</b>
-            <p>
-              Only stored SerpApi records, capture timestamps, and their direct
-              public source links are eligible for this brief.
-            </p>
-          </div>
-          <div>
-            <b>WHAT WE CANNOT CONCLUDE</b>
-            <p>
-              Ads and search readings do not establish persuasion, unique people
-              reached, voter support, or likely election outcomes.
-            </p>
-          </div>
-          <p className="ai-note">
-            <i />
-            gpt-5-mini is constrained to stored civic evidence and declines
-            political advice.
+          <span>REPORTER BRIEFING · SOURCE-LINKED</span>
+          <h1>{raceName}</h1>
+          <p>
+            A reporting starting point—not a story verdict. Every claim below
+            links to a public record.
           </p>
-        </aside>
+        </div>
+        <button onClick={onReturn}>← Voter view</button>
       </div>
+      <section className="reporter-lead">
+        <div>
+          <span>STORY LEAD</span>
+          <h2>{storyLead}</h2>
+          <p>{storyDeck}</p>
+        </div>
+        <aside>
+          <span>LATEST PUBLIC CHECK</span>
+          <b>{formatDate(latestCapture)}</b>
+          <p>
+            {reportable.length} source-qualified change
+            {reportable.length === 1 ? "" : "s"} in this briefing.
+          </p>
+          <button onClick={copyReporterNote}>Copy reporter note</button>
+          {copyStatus && <small>{copyStatus}</small>}
+        </aside>
+      </section>
+      <section className="reporter-grid">
+        <article className="reporter-section change-summary">
+          <header>
+            <span>WHAT CHANGED</span>
+            <p>Only changes that pass a visible rule appear here.</p>
+          </header>
+          {reportable.length ? (
+            reportable.map((change: AnyRecord) => (
+              <div className="change-card" key={change._id}>
+                <b>{change.kind.replaceAll("_", " ")}</b>
+                <p>{change.rule}</p>
+                <small>
+                  {change.evidenceUrls?.length ?? 0} public source link
+                  {change.evidenceUrls?.length === 1 ? "" : "s"} available in
+                  the evidence pack.
+                </small>
+              </div>
+            ))
+          ) : (
+            <div className="change-card">
+              <b>Baseline only</b>
+              <p>
+                The first comparable check is the starting point. A later check
+                is needed before this desk calls a change.
+              </p>
+            </div>
+          )}
+        </article>
+        <article className="reporter-section reporter-limit">
+          <header>
+            <span>REPORTING GUARDRAIL</span>
+          </header>
+          <p>
+            {brief?.cannotConclude ??
+              "Public ads, news results, and search activity do not establish voter opinion, unique reach, persuasion, or a likely outcome."}
+          </p>
+          <b>
+            Use this as a lead. Verify the original source before publishing.
+          </b>
+        </article>
+      </section>
+      <section className="reporter-section evidence-pack">
+        <header>
+          <div>
+            <span>EVIDENCE PACK</span>
+            <h2>Open the records behind this briefing</h2>
+          </div>
+          <p>
+            {evidencePack.length} direct public source link
+            {evidencePack.length === 1 ? "" : "s"}
+          </p>
+        </header>
+        {evidencePack.length ? (
+          <div className="evidence-pack-list">
+            {evidencePack.map((source) => (
+              <a
+                href={source.sourceUrl}
+                key={source.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>
+                  {source.recordId?.startsWith("ad:")
+                    ? "PUBLIC AD"
+                    : source.recordId?.startsWith("news:")
+                      ? "NEWS REPORT"
+                      : "PUBLIC SOURCE"}
+                </span>
+                <b>{source.title}</b>
+                <em>Open source ↗</em>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="reporter-empty">
+            Fetch a public race capture to build an evidence pack.
+          </p>
+        )}
+      </section>
+      <section className="reporter-bottom-grid">
+        <article className="reporter-section ad-angle">
+          <header>
+            <div>
+              <span>PUBLIC AD SNAPSHOT</span>
+              <h2>What each campaign has put online</h2>
+            </div>
+            <p>Counts are individual public records, not estimated audience.</p>
+          </header>
+          <div className="candidate-ad-summary">
+            {candidateAdSummary.map((candidate: AnyRecord) => (
+              <article key={candidate.name}>
+                <span>{candidate.name}</span>
+                <b>
+                  {candidate.count} public ad record
+                  {candidate.count === 1 ? "" : "s"}
+                </b>
+                <p>
+                  {candidate.formats.length
+                    ? `Formats: ${candidate.formats.join(", ")}.`
+                    : "No public ad record is stored in this capture."}
+                </p>
+                {candidate.sourceUrl && (
+                  <a
+                    href={candidate.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open an ad record ↗
+                  </a>
+                )}
+              </article>
+            ))}
+          </div>
+        </article>
+        <aside className="reporter-section reporting-prompts">
+          <header>
+            <span>QUESTIONS TO PURSUE</span>
+            <p>Reporting prompts, not AI conclusions.</p>
+          </header>
+          <ul>
+            <li>
+              {issueLead
+                ? `What are the candidates publicly saying about ${issueLead.label.toLowerCase()}?`
+                : "What topic is showing up repeatedly in local reporting?"}
+            </li>
+            <li>Do newly observed ads change after the next public check?</li>
+            <li>
+              Which claims in the public ads deserve independent verification?
+            </li>
+          </ul>
+        </aside>
+      </section>
     </section>
   );
 }
@@ -980,7 +1123,11 @@ function VoterRadar() {
         />
       )}
       {pressDesk ? (
-        <PressDesk radar={radar} onReturn={() => setPressDesk(false)} />
+        <PressDesk
+          radar={radar}
+          brief={brief}
+          onReturn={() => setPressDesk(false)}
+        />
       ) : (
         <section className="voter-page">
           <div className="voter-hero">
